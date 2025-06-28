@@ -13,6 +13,10 @@ def get_db():
     finally:
         db.close()
 
+@app.get("/")
+def read_root():
+    return {"message": "Magiq Desk API is running"}     
+
 @app.post("/tasks/", response_model=TaskOut)
 def add_task(task: TaskCreate, db: Session = Depends(get_db)):
     return crud.create_task(db, task)
