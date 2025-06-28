@@ -1,73 +1,63 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional
-import itertools
+import logging
+from fastapi import FastAPI, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from . import models, database, crud, scheduler
+from .models import TaskCreate, TaskOut, NoteCreate, NoteOut
 
+# Setup logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+models.Base.metadata.create_all(bind=database.engine)
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow your React frontend
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def get_db():
+    db = database.SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-class FirstRow(BaseModel):
-    row: List[int]
+@app.post("/tasks/", response_model=TaskOut)
+def add_task(task: TaskCreate, db: Session = Depends(get_db)):
+    try:
+        result = crud.create_task(db, task)
+        logger.info(f"Task created: {result.title}")
+        return result
+    except IntegrityError:
+        db.rollback()
+        logger.error(f"Duplicate task title: {task.title}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Task title must be unique."
+        )
+    except Exception as e:
+        logger.exception("Unexpected error in /tasks/")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
-@app.post("/generate")
-def generate_magic_square(data: FirstRow):
-    first_row = data.row
-    if len(first_row) != 4 or any(not (1 <= x < 100) for x in first_row):
-        return {"error": "Input must be 4 integers between 1 and 99"}
+@app.get("/tasks/", response_model=list[TaskOut])
+def read_tasks(db: Session = Depends(get_db)):
+    try:
+        return crud.get_tasks(db)
+    except Exception as e:
+        logger.exception("Error reading tasks")
+        raise HTTPException(status_code=500, detail="Unable to fetch tasks")
 
-    magic_sum = sum(first_row)
-    used = set(first_row)
+@app.post("/notes/", response_model=NoteOut)
+def add_note(note: NoteCreate, db: Session = Depends(get_db)):
+    try:
+        result = crud.create_note(db, note)
+        logger.info("Note created")
+        return result
+    except Exception as e:
+        logger.exception("Error creating note")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
-    # Step 1: Get all candidates for remaining values
-    available = [i for i in range(1, 100) if i not in used]
-
-    # Step 2: Backtracking
-    def is_valid(grid):
-        # Rows
-        for row in grid:
-            if sum(row) != magic_sum:
-                return False
-        # Columns
-        for c in range(4):
-            if sum(grid[r][c] for r in range(4)) != magic_sum:
-                return False
-        # Diagonals
-        if sum(grid[i][i] for i in range(4)) != magic_sum:
-            return False
-        if sum(grid[i][3 - i] for i in range(4)) != magic_sum:
-            return False
-        return True
-
-    def backtrack(path: List[int], depth: int) -> Optional[List[List[int]]]:
-        if len(path) == 12:
-            grid = [
-                first_row,
-                path[0:4],
-                path[4:8],
-                path[8:12]
-            ]
-            if is_valid(grid):
-                return grid
-            return None
-
-        for val in available:
-            if val in path:
-                continue
-            res = backtrack(path + [val], depth + 1)
-            if res:
-                return res
-        return None
-
-    solution = backtrack([], 0)
-    if solution:
-        return {"square": solution}
-    else:
-        return {"error": "No valid square found"}
+@app.get("/notes/", response_model=list[NoteOut])
+def read_notes(db: Session = Depends(get_db)):
+    try:
+        return crud.get_notes(db)
+    except Exception as e:
+        logger.exception("Error reading notes")
+        raise HTTPException(status_code=500, detail="Unable to fetch notes")

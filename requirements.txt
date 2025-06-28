@@ -1,3 +1,5 @@
-fastapi
-uvicorn
-pydantic
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+sqlalchemy==2.0.30
+pydantic==2.7.1
+aiohttp==3.9.5
