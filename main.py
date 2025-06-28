@@ -1,15 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
-import random
+from typing import List, Optional
+import itertools
 
 app = FastAPI()
 
-# CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace with your Vercel URL in prod
+    allow_origins=["*"],  # Allow your React frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,24 +19,55 @@ class FirstRow(BaseModel):
 
 @app.post("/generate")
 def generate_magic_square(data: FirstRow):
-    dob = data.row
-    if len(dob) != 4 or any(not (1 <= x < 100) for x in dob):
-        return {"error": "Invalid input"}
+    first_row = data.row
+    if len(first_row) != 4 or any(not (1 <= x < 100) for x in first_row):
+        return {"error": "Input must be 4 integers between 1 and 99"}
 
-    target_sum = sum(dob)
-    used = set(dob)
+    magic_sum = sum(first_row)
+    used = set(first_row)
 
-    for _ in range(50000):
-        candidates = [i for i in range(1, 100) if i not in used]
-        attempt = random.sample(candidates, 12)
-        square = [dob, attempt[0:4], attempt[4:8], attempt[8:12]]
+    # Step 1: Get all candidates for remaining values
+    available = [i for i in range(1, 100) if i not in used]
 
-        rows_ok = all(sum(row) == target_sum for row in square)
-        cols_ok = all(sum(square[r][c] for r in range(4)) == target_sum for c in range(4))
-        diag1 = sum(square[i][i] for i in range(4))
-        diag2 = sum(square[i][3 - i] for i in range(4))
+    # Step 2: Backtracking
+    def is_valid(grid):
+        # Rows
+        for row in grid:
+            if sum(row) != magic_sum:
+                return False
+        # Columns
+        for c in range(4):
+            if sum(grid[r][c] for r in range(4)) != magic_sum:
+                return False
+        # Diagonals
+        if sum(grid[i][i] for i in range(4)) != magic_sum:
+            return False
+        if sum(grid[i][3 - i] for i in range(4)) != magic_sum:
+            return False
+        return True
 
-        if rows_ok and cols_ok and diag1 == target_sum and diag2 == target_sum:
-            return {"square": square}
+    def backtrack(path: List[int], depth: int) -> Optional[List[List[int]]]:
+        if len(path) == 12:
+            grid = [
+                first_row,
+                path[0:4],
+                path[4:8],
+                path[8:12]
+            ]
+            if is_valid(grid):
+                return grid
+            return None
 
-    return {"error": "No valid square found"}
+        for val in available:
+            if val in path:
+                continue
+            res = backtrack(path + [val], depth + 1)
+            if res:
+                return res
+        return None
+
+    solution = backtrack([], 0)
+    if solution:
+        return {"square": solution}
+    else:
+        return {"error": "No valid square found"}
