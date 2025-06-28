@@ -1,25 +1,25 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from .database import Base
-from pydantic import BaseModel, constr
+from pydantic import BaseModel
 from datetime import datetime
 
-# SQLAlchemy Models
+# SQLAlchemy models
 class Task(Base):
     __tablename__ = "tasks"
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(100), nullable=False, unique=True)
+    title = Column(String)
     completed = Column(Boolean, default=False)
     due = Column(DateTime, nullable=True)
 
 class Note(Base):
     __tablename__ = "notes"
     id = Column(Integer, primary_key=True, index=True)
-    content = Column(String(1000), nullable=False)
+    content = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-# Pydantic Models
+# Pydantic models
 class TaskCreate(BaseModel):
-    title: constr(min_length=1, max_length=100)
+    title: str
     due: datetime | None = None
 
 class TaskOut(TaskCreate):
@@ -30,7 +30,7 @@ class TaskOut(TaskCreate):
         orm_mode = True
 
 class NoteCreate(BaseModel):
-    content: constr(min_length=1, max_length=1000)
+    content: str
 
 class NoteOut(NoteCreate):
     id: int
