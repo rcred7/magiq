@@ -6,6 +6,15 @@ from .models import TaskCreate, TaskOut, NoteCreate, NoteOut
 models.Base.metadata.create_all(bind=database.engine)
 app = FastAPI()
 
+# ✅ CORS setup — add this immediately after app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # change this to ["http://localhost:5173"] in dev or to your frontend domain in prod
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 def get_db():
     db = database.SessionLocal()
     try:
